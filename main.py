@@ -1,4 +1,5 @@
 import streamlit as st
+import spacy
 import networkx as nx
 import plotly.graph_objects as go
 import plotly.express as px
@@ -45,7 +46,6 @@ class NewsEventMapper:
         
     def extract_keywords(self, text: str) -> List[str]:
         """Extract keywords from text using simple NLP techniques"""
-        # Remove common stop words
         stop_words = {
             'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
             'of', 'with', 'by', 'from', 'as', 'is', 'are', 'was', 'were', 'be', 
@@ -54,7 +54,6 @@ class NewsEventMapper:
             'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'
         }
         
-        # Extract words and filter
         words = re.findall(r'\b[a-zA-Z]{3,}\b', text.lower())
         keywords = [word for word in words if word not in stop_words]
         
@@ -182,28 +181,58 @@ class NewsEventMapper:
 
         return sorted(articles, key=lambda x: x['relevance'], reverse=True)
 
+    def hybrid_relevance_score(self, event: Dict, target_event: Dict) -> float:
+        """Hybrid relevance: combines keyword overlap, TF-IDF cosine similarity, and entity overlap"""
+        # --- Keyword Overlap ---
+        event_keywords = set(self.extract_keywords(f"{event.get('title', '')} {event.get('summary', '')}"))
+        target_keywords = set(self.extract_keywords(f"{target_event.get('title', '')} {target_event.get('summary', '')}"))
+        keyword_overlap = len(event_keywords & target_keywords) / max(1, len(event_keywords | target_keywords))
+
+        # --- TF-IDF Cosine Similarity ---
+        try:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.metrics.pairwise import cosine_similarity
+        except ImportError:
+            return keyword_overlap  # fallback if sklearn not available
+        docs = [f"{event.get('title', '')} {event.get('summary', '')}", f"{target_event.get('title', '')} {target_event.get('summary', '')}"]
+        tfidf = TfidfVectorizer().fit_transform(docs)
+        tfidf_sim = cosine_similarity(tfidf[0], tfidf[1])[0][0]
+
+        # --- Named Entity Overlap ---
+        try:
+            import spacy
+            nlp = spacy.load("en_core_web_sm")
+            doc1 = nlp(docs[0])
+            doc2 = nlp(docs[1])
+            ents1 = set([ent.text for ent in doc1.ents])
+            ents2 = set([ent.text for ent in doc2.ents])
+            entity_overlap = len(ents1 & ents2) / max(1, len(ents1 | ents2))
+        except Exception:
+            entity_overlap = 0.0
+
+        # --- Weighted Hybrid Score ---
+        # You can tune weights as needed
+        score = 0.4 * keyword_overlap + 0.4 * tfidf_sim + 0.2 * entity_overlap
+        return min(1.0, score)
     
-    def calculate_relevance_score(self, event: Dict, target_keywords: List[str]) -> float:
-        """Calculate how relevant an event is to the target keywords"""
-        event_text = f"{event.get('title', '')} {event.get('summary', '')}"
-        event_keywords = self.extract_keywords(event_text)
-        
-        # Calculate keyword overlap
-        overlap = len(set(event_keywords) & set(target_keywords))
-        total_keywords = len(set(event_keywords) | set(target_keywords))
-        
-        if total_keywords == 0:
-            return 0.0
-            
-        jaccard_similarity = overlap / total_keywords
-        
+    def calculate_relevance_score(self, event: Dict, target_keywords: List[str], target_event: Optional[Dict] = None) -> float:
+        """Hybrid relevance: combines keyword overlap, TF-IDF cosine similarity, and entity overlap"""
+        # If target_event is provided, use hybrid method
+        if target_event:
+            score = self.hybrid_relevance_score(event, target_event)
+        else:
+            # fallback to keyword overlap
+            event_text = f"{event.get('title', '')} {event.get('summary', '')}"
+            event_keywords = self.extract_keywords(event_text)
+            overlap = len(set(event_keywords) & set(target_keywords))
+            total_keywords = len(set(event_keywords) | set(target_keywords))
+            score = overlap / max(1, total_keywords)
         # Boost score for recent events
         if 'date' in event:
             days_old = (datetime.now() - event['date']).days
             recency_bonus = max(0, 1 - days_old / 365)  # Bonus decreases over a year
-            return min(1.0, jaccard_similarity * 1.5 + recency_bonus * 0.3)
-        
-        return jaccard_similarity
+            score = min(1.0, score * 1.5 + recency_bonus * 0.3)
+        return score
     
     def build_event_graph(self, initial_url: str) -> bool:
         """Build the complete event graph starting from an initial news article"""
@@ -256,7 +285,10 @@ class NewsEventMapper:
                     if news['url'] in processed or added_count >= 5:
                         continue
                     
-                    relevance = self.calculate_relevance_score(news, current_event.keywords)
+                    relevance = self.calculate_relevance_score(news, current_event.keywords, target_event={
+                        'title': current_event.title,
+                        'summary': current_event.summary
+                    })
                     if relevance < 0.3:  # Relevance threshold
                         continue
                     
@@ -270,7 +302,6 @@ class NewsEventMapper:
                         depth_level=depth + 1
                     )
                     
-                    # Add to graph with positioning
                     # Add to graph with 3D positioning
                     angle = (added_count * 360 / 8) * np.pi / 180
                     radius = (depth + 1) * 2
@@ -318,7 +349,6 @@ class NewsEventMapper:
         if not self.graph.nodes():
             return go.Figure()
         
-        # Extract node information
         # Extract node information for 3D
         node_x, node_y, node_z, node_text, node_size, node_color, node_custom = [], [], [], [], [], [], []
         for node in self.graph.nodes():
@@ -327,10 +357,12 @@ class NewsEventMapper:
             node_x.append(pos[0])
             node_y.append(pos[1])
             node_z.append(pos[2])
+            # Node label is just the title
             node_text.append(event.title[:50] + "..." if len(event.title) > 50 else event.title)
             node_size.append(self.graph.nodes[node]['size'])
             node_color.append(event.relevance_score)
-            node_custom.append([event.relevance_score, event.date.strftime('%Y-%m-%d')])
+            # Add relevance, date, and url to customdata for popup
+            node_custom.append([event.relevance_score, event.date.strftime('%Y-%m-%d'), event.url])
 
         # Extract edge information for 3D
         edge_x, edge_y, edge_z = [], [], []
@@ -352,7 +384,7 @@ class NewsEventMapper:
             x=node_x, y=node_y, z=node_z,
             text=node_text,
             mode='markers+text',
-            hovertemplate='<b>%{text}</b><br>Relevance: %{customdata[0]:.2f}<br>Date: %{customdata[1]}<extra></extra>',
+            hovertemplate='<b>%{text}</b><br>Relevance: %{customdata[0]:.2f}<br>Date: %{customdata[1]}<br><a href="%{customdata[2]}" target="_blank">Visit Article</a><extra></extra>',
             marker=dict(
                 size=node_size,
                 color=node_color,
@@ -384,56 +416,6 @@ class NewsEventMapper:
                            ),
                            height=700
                        ))
-        return fig
-        
-        # Extract edge information
-        edge_x, edge_y = [], []
-        edge_info = []
-        
-        for node in self.graph.nodes():
-            pos = self.graph.nodes[node]['pos']
-            event = self.graph.nodes[node]['event']
-            
-            node_trace['x'] += tuple([pos[0]])
-            node_trace['y'] += tuple([pos[1]])
-            node_trace['text'] += tuple([event.title[:50] + "..." if len(event.title) > 50 else event.title])
-            node_trace['marker']['size'] += tuple([self.graph.nodes[node]['size']])
-            node_trace['marker']['color'] += tuple([event.relevance_score])
-            node_trace['customdata'] += tuple([event.relevance_score, event.date.strftime('%Y-%m-%d')])
-        
-        for edge in self.graph.edges():
-            x0, y0 = self.graph.nodes[edge[0]]['pos']
-            x1, y1 = self.graph.nodes[edge[1]]['pos']
-            edge_x.extend([x0, x1, None])
-            edge_y.extend([y0, y1, None])
-        
-        edge_trace = go.Scatter(
-            x=edge_x, y=edge_y,
-            line=dict(width=2, color='gray'),
-            hoverinfo='none',
-            mode='lines'
-        )
-        
-        # Create figure
-        fig = go.Figure(data=[edge_trace, node_trace],
-                       layout=go.Layout(
-                           title=dict(
-                            text='News Event Mind Map',
-                            font=dict(size=16)  
-                            ),
-                           showlegend=False,
-                           hovermode='closest',
-                           margin=dict(b=20,l=5,r=5,t=40),
-                           annotations=[ dict(
-                               text="Click on nodes to view article details",
-                               showarrow=False,
-                               xref="paper", yref="paper",
-                               x=0.005, y=-0.002 ) ],
-                           xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                           yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                           height=700
-                       ))
-        
         return fig
     
     def get_event_details(self, url: str) -> Optional[NewsEvent]:
