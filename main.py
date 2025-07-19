@@ -16,6 +16,8 @@ from urllib.parse import urljoin, urlparse
 import pandas as pd
 from collections import deque, defaultdict
 import numpy as np
+import torch
+from sentence_transformers import SentenceTransformer
 
 @dataclass
 class NewsEvent:
@@ -44,7 +46,6 @@ class NewsEventMapper:
         self.max_events_per_level = 10
         # Load transformer model for semantic similarity
         try:
-            from sentence_transformers import SentenceTransformer
             self.sim_model = SentenceTransformer('all-MiniLM-L6-v2')
         except Exception as e:
             st.error(f"Error loading transformer model: {str(e)}")
@@ -206,7 +207,6 @@ class NewsEventMapper:
             emb_event = self.sim_model.encode(event_text, convert_to_tensor=True)
             emb_keywords = self.sim_model.encode(keywords_text, convert_to_tensor=True)
             # Compute cosine similarity
-            import torch
             similarity = torch.nn.functional.cosine_similarity(emb_event, emb_keywords, dim=0).item()
             # Normalize to [0,1]
             score = max(0.0, min(1.0, (similarity + 1) / 2))
