@@ -1,5 +1,4 @@
 import torch
-import torch.version
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -39,10 +38,10 @@ B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
 B_INST, E_INST = "[INST]", "[/INST]"
 
 
-def generate_response(llm_model, llm_tokenizer, prompt_user, prompt_system=SYSTEM_PROMPT, temperature=0.4):
+def generate_response(llm_model, llm_tokenizer, prompt_user, prompt_system=SYSTEM_PROMPT, temperature=0.4, max_tokens=100):
     prompt = f"{B_INST} {B_SYS}{prompt_system.strip()}{E_SYS}{prompt_user.strip()} {E_INST}\n\n"
     pipe = pipeline("text-generation", model=llm_model, tokenizer=llm_tokenizer)
-    output = pipe(prompt, max_new_tokens=100, do_sample=True, temperature=0.5)
+    output = pipe(prompt, max_new_tokens=max_tokens, do_sample=True, temperature=temperature)
     full_text = output[0]["generated_text"]
     generated_text = full_text[len(prompt):].strip()
     return generated_text
