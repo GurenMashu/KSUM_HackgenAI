@@ -1,5 +1,5 @@
 import streamlit as st
-import spacy
+import stanza
 import networkx as nx
 import plotly.graph_objects as go
 import plotly.express as px
@@ -182,7 +182,7 @@ class NewsEventMapper:
         return sorted(articles, key=lambda x: x['relevance'], reverse=True)
 
     def hybrid_relevance_score(self, event: Dict, target_event: Dict) -> float:
-        """Hybrid relevance: combines keyword overlap, TF-IDF cosine similarity, and entity overlap"""
+        """Hybrid relevance: combines keyword overlap, TF-IDF cosine similarity, and entity overlap (using Stanza)"""
         # --- Keyword Overlap ---
         event_keywords = set(self.extract_keywords(f"{event.get('title', '')} {event.get('summary', '')}"))
         target_keywords = set(self.extract_keywords(f"{target_event.get('title', '')} {target_event.get('summary', '')}"))
@@ -198,12 +198,14 @@ class NewsEventMapper:
         tfidf = TfidfVectorizer().fit_transform(docs)
         tfidf_sim = cosine_similarity(tfidf[0], tfidf[1])[0][0]
 
-        # --- Named Entity Overlap ---
+        # --- Named Entity Overlap (Stanza) ---
         try:
-            import spacy
-            nlp = spacy.load("en_core_web_sm")
-            doc1 = nlp(docs[0])
-            doc2 = nlp(docs[1])
+            # Stanza setup (download model if needed)
+            if not hasattr(self, 'stanza_nlp'):
+                stanza.download('en')
+                self.stanza_nlp = stanza.Pipeline('en', processors='tokenize,ner', use_gpu=False)
+            doc1 = self.stanza_nlp(docs[0])
+            doc2 = self.stanza_nlp(docs[1])
             ents1 = set([ent.text for ent in doc1.ents])
             ents2 = set([ent.text for ent in doc2.ents])
             entity_overlap = len(ents1 & ents2) / max(1, len(ents1 | ents2))
@@ -211,7 +213,6 @@ class NewsEventMapper:
             entity_overlap = 0.0
 
         # --- Weighted Hybrid Score ---
-        # You can tune weights as needed
         score = 0.4 * keyword_overlap + 0.4 * tfidf_sim + 0.2 * entity_overlap
         return min(1.0, score)
     
