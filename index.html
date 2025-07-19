@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Visual Scripting Interface</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 h-screen flex overflow-hidden">
+    <div class="w-64 bg-gray-800 text-white p-4">
+      <h2 class="text-lg font-semibold mb-4">Blocks</h2>
+      <button
+        onclick="createBlock()"
+        class="w-full bg-teal-600 hover:bg-teal-700 py-2 rounded text-sm"
+      >
+        + Add Block
+      </button>
+    </div>
+
+    <div class="flex-1 relative flex flex-col">
+      <div
+        id="canvas"
+        class="flex-1 relative overflow-hidden"
+        onmousedown="startDrag(event)"
+        onmouseup="endDrag(event)"
+        onmousemove="drag(event)"
+      >
+        <canvas
+          id="connectionCanvas"
+          class="absolute top-0 left-0 z-0"
+        ></canvas>
+        <div
+          id="delete-zone"
+          class="absolute bottom-0 left-0 w-full h-14 bg-red-600 text-white flex items-center justify-center font-bold z-10 pointer-events-none"
+        >
+          🗑️ Drop Here to Delete
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="json-output"
+      class="w-96 bg-white border-l border-gray-300 p-4 font-mono text-xs overflow-y-auto whitespace-pre-wrap"
+    ></div>
+
+    <script>
+      let canvas = document.getElementById("canvas");
+      let deleteZone = document.getElementById("delete-zone");
+      let connectionCanvas = document.getElementById("connectionCanvas");
+      let ctx = connectionCanvas.getContext("2d");
+      let jsonOutput = document.getElementById("json-output");
+
+      let currentBlock = null;
+      let offsetX, offsetY;
+      let connections = [];
+      let connectingFrom = null;
+      let blockIdCounter = 1;
+
+      function getNonOverlappingPosition() {
+        const blocks = Array.from(canvas.querySelectorAll(".block"));
+        const startX = 100;
+        const startY = 100;
+        let posX = startX;
+        let posY = startY;
+
+        let overlap;
+        do {
+          overlap = false;
+          for (const block of blocks) {
+            const testLeft = parseInt(block.style.left, 10);
+            const testTop = parseInt(block.style.top, 10);
+            if (
+              Math.abs(testLeft - posX) < 140 &&
+              Math.abs(testTop - posY) < 60
+            ) {
+              overlap = true;
+              posX += 150;
+              if (posX + 140 > canvas.clientWidth) {
+                posX = startX;
+                posY += 100;
+              }
+              break;
+            }
+          }
+        } while (overlap);
+
+        return { left: posX, top: posY };
+      }
+
+      function createBlock() {
+        const name = prompt("Enter block name:");
+        if (!name) return;
+
+        const block = document.createElement("div");
+        block.className =
+          "block absolute bg-blue-500 text-white p-2 rounded shadow-md w-36 cursor-move z-10 text-center text-sm";
+        const blockId = "block-" + blockIdCounter++;
+        block.setAttribute("data-name", name);
+        block.setAttribute("data-id", blockId);
+
+        const pos = getNonOverlappingPosition();
+        block.style.left = pos.left + "px";
+        block.style.top = pos.top + "px";
+        block.innerHTML = `<strong>${name}</strong>`;
+
+        const inputPort = document.createElement("div");
+        inputPort.className =
+          "port input-port absolute left-[-8px] top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border border-black rounded-full cursor-crosshair";
+        block.appendChild(inputPort);
+
+        const outputPort = document.createElement("div");
+        outputPort.className =
+          "port output-port absolute right-[-8px] top-1/2 transform -translate-y-1/2 w-3 h-3 bg-white border border-black rounded-full cursor-crosshair";
+        block.appendChild(outputPort);
+
+        outputPort.onmousedown = (e) => {
+          e.stopPropagation();
+          connectingFrom = outputPort;
+        };
+
+        inputPort.onmouseup = (e) => {
+          e.stopPropagation();
+          if (connectingFrom && connectingFrom !== inputPort) {
+            connections.push({
+              from: connectingFrom,
+              to: inputPort,
+            });
+            connectingFrom = null;
+            drawConnections();
+          }
+        };
+
+        block.onmousedown = function (e) {
+          currentBlock = block;
+          offsetX = e.offsetX;
+          offsetY = e.offsetY;
+        };
+
+        canvas.appendChild(block);
+        drawConnections();
+      }
+
+      function startDrag(e) {
+        if (e.target.classList.contains("block")) {
+          currentBlock = e.target;
+          offsetX = e.offsetX;
+          offsetY = e.offsetY;
+        }
+      }
+
+      function drag(e) {
+        if (currentBlock) {
+          let rect = canvas.getBoundingClientRect();
+          currentBlock.style.left =
+            e.clientX - rect.left - offsetX + "px";
+          currentBlock.style.top =
+            e.clientY - rect.top - offsetY + "px";
+          drawConnections();
+        }
+      }
+
+      function endDrag(e) {
+        if (currentBlock) {
+          let blockRect = currentBlock.getBoundingClientRect();
+          let deleteRect = deleteZone.getBoundingClientRect();
+
+          const intersect = !(
+            blockRect.right < deleteRect.left ||
+            blockRect.left > deleteRect.right ||
+            blockRect.bottom < deleteRect.top ||
+            blockRect.top > deleteRect.bottom
+          );
+
+          if (intersect) {
+            const inputPort = currentBlock.querySelector(".input-port");
+            const outputPort = currentBlock.querySelector(".output-port");
+            connections = connections.filter(
+              (conn) => conn.from !== outputPort && conn.to !== inputPort
+            );
+            canvas.removeChild(currentBlock);
+            drawConnections();
+          }
+
+          currentBlock = null;
+        }
+      }
+
+      function drawConnections() {
+        connectionCanvas.width = canvas.clientWidth;
+        connectionCanvas.height = canvas.clientHeight;
+
+        ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+
+        connections = connections.filter(
+          (conn) =>
+            document.body.contains(conn.from) &&
+            document.body.contains(conn.to)
+        );
+
+        connections.forEach((conn) => {
+          const fromRect = conn.from.getBoundingClientRect();
+          const toRect = conn.to.getBoundingClientRect();
+          const canvasRect = canvas.getBoundingClientRect();
+
+          const startX =
+            fromRect.left + fromRect.width / 2 - canvasRect.left;
+          const startY =
+            fromRect.top + fromRect.height / 2 - canvasRect.top;
+          const endX = toRect.left + toRect.width / 2 - canvasRect.left;
+          const endY = toRect.top + toRect.height / 2 - canvasRect.top;
+
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.bezierCurveTo(startX + 50, startY, endX - 50, endY, endX, endY);
+          ctx.strokeStyle = "#2c3e50";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        });
+
+        updateJSON();
+      }
+
+      function updateJSON() {
+        const blocks = Array.from(canvas.querySelectorAll('.block'));
+
+        const portToName = new Map();
+        const nameToBlock = new Map();
+
+        blocks.forEach(b => {
+            const name = b.getAttribute('data-name');
+            const input = b.querySelector('.input-port');
+            const output = b.querySelector('.output-port');
+            portToName.set(input, name);
+            portToName.set(output, name);
+            nameToBlock.set(name, { input, output });
+        });
+
+        // Build parent-child relationships
+        const nameConnections = connections.map(conn => ({
+            from: portToName.get(conn.from),
+            to: portToName.get(conn.to)
+        }));
+
+        const result = [];
+
+        blocks.forEach(b => {
+            const name = b.getAttribute('data-name');
+            let parent = "Nil";
+            let child = "Nil";
+
+            // Search connections to/from this block
+            nameConnections.forEach(c => {
+            if (c.to === name) parent = c.from;
+            if (c.from === name) child = c.to;
+            });
+
+            result.push({
+            name: name,
+            parent: parent,
+            child: child
+            });
+        });
+
+        jsonOutput.textContent = JSON.stringify(result, null, 2);
+        }
+
+    </script>
+  </body>
+</html>
