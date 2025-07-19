@@ -1,4 +1,14 @@
 import os
+import torch
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    BitsAndBytesConfig,
+    pipeline,
+)
+import test
+
+tokenizer, model = test.model_loading()
 
 class PromptEngine:
     def __init__(self,model,tokenizer):
