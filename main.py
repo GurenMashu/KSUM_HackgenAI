@@ -228,7 +228,7 @@ class NewsEventMapper:
             self.graph.add_node(
                 initial_url,
                 event=initial_event,
-                pos=(0, 0),
+                pos=(0, 0, 0),  # Add z=0 for 3D
                 color='red',
                 size=30
             )
@@ -271,18 +271,21 @@ class NewsEventMapper:
                     )
                     
                     # Add to graph with positioning
+                    # Add to graph with 3D positioning
                     angle = (added_count * 360 / 8) * np.pi / 180
                     radius = (depth + 1) * 2
                     x = radius * np.cos(angle)
                     y = radius * np.sin(angle)
-                    
+                    # z coordinate: spiral or layer by depth
+                    z = depth * 2 + np.sin(angle) * 1.5
+
                     color = 'orange' if depth == 0 else 'lightblue' if depth < 3 else 'lightgreen'
                     size = max(10, 25 - depth * 3)
-                    
+
                     self.graph.add_node(
                         news['url'],
                         event=related_event,
-                        pos=(x, y),
+                        pos=(x, y, z),
                         color=color,
                         size=size
                     )
@@ -316,19 +319,72 @@ class NewsEventMapper:
             return go.Figure()
         
         # Extract node information
-        node_trace = go.Scatter(
-            x=[], y=[], text=[], mode='markers+text',
+        # Extract node information for 3D
+        node_x, node_y, node_z, node_text, node_size, node_color, node_custom = [], [], [], [], [], [], []
+        for node in self.graph.nodes():
+            pos = self.graph.nodes[node]['pos']
+            event = self.graph.nodes[node]['event']
+            node_x.append(pos[0])
+            node_y.append(pos[1])
+            node_z.append(pos[2])
+            node_text.append(event.title[:50] + "..." if len(event.title) > 50 else event.title)
+            node_size.append(self.graph.nodes[node]['size'])
+            node_color.append(event.relevance_score)
+            node_custom.append([event.relevance_score, event.date.strftime('%Y-%m-%d')])
+
+        # Extract edge information for 3D
+        edge_x, edge_y, edge_z = [], [], []
+        for edge in self.graph.edges():
+            x0, y0, z0 = self.graph.nodes[edge[0]]['pos']
+            x1, y1, z1 = self.graph.nodes[edge[1]]['pos']
+            edge_x.extend([x0, x1, None])
+            edge_y.extend([y0, y1, None])
+            edge_z.extend([z0, z1, None])
+
+        edge_trace = go.Scatter3d(
+            x=edge_x, y=edge_y, z=edge_z,
+            line=dict(width=2, color='gray'),
+            hoverinfo='none',
+            mode='lines'
+        )
+
+        node_trace = go.Scatter3d(
+            x=node_x, y=node_y, z=node_z,
+            text=node_text,
+            mode='markers+text',
             hovertemplate='<b>%{text}</b><br>Relevance: %{customdata[0]:.2f}<br>Date: %{customdata[1]}<extra></extra>',
-            textposition="middle center",
             marker=dict(
-                size=[],
-                color=[],
+                size=node_size,
+                color=node_color,
                 colorscale='Viridis',
                 showscale=True,
                 colorbar=dict(title="Relevance Score")
             ),
-            customdata=[]
+            customdata=node_custom,
+            textposition="middle center"
         )
+
+        fig = go.Figure(data=[edge_trace, node_trace],
+                       layout=go.Layout(
+                           title=dict(
+                            text='News Event Mind Map (3D)',
+                            font=dict(size=16)  
+                            ),
+                           showlegend=False,
+                           margin=dict(b=20,l=5,r=5,t=40),
+                           annotations=[ dict(
+                               text="Click on nodes to view article details",
+                               showarrow=False,
+                               xref="paper", yref="paper",
+                               x=0.005, y=-0.002 ) ],
+                           scene=dict(
+                               xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                               yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                               zaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                           ),
+                           height=700
+                       ))
+        return fig
         
         # Extract edge information
         edge_x, edge_y = [], []
