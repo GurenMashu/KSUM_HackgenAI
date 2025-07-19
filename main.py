@@ -1,5 +1,4 @@
 import streamlit as st
-import stanza
 import networkx as nx
 import plotly.graph_objects as go
 import plotly.express as px
@@ -43,6 +42,13 @@ class NewsEventMapper:
         self.keyword_index = defaultdict(set)
         self.max_depth = 5
         self.max_events_per_level = 10
+        # Load transformer model for semantic similarity
+        try:
+            from sentence_transformers import SentenceTransformer
+            self.sim_model = SentenceTransformer('all-MiniLM-L6-v2')
+        except Exception as e:
+            st.error(f"Error loading transformer model: {str(e)}")
+            self.sim_model = None
         
     def extract_keywords(self, text: str) -> List[str]:
         """Extract keywords from text using simple NLP techniques"""
@@ -181,59 +187,38 @@ class NewsEventMapper:
 
         return sorted(articles, key=lambda x: x['relevance'], reverse=True)
 
-    def hybrid_relevance_score(self, event: Dict, target_event: Dict) -> float:
-        """Hybrid relevance: combines keyword overlap, TF-IDF cosine similarity, and entity overlap (using Stanza)"""
-        # --- Keyword Overlap ---
-        event_keywords = set(self.extract_keywords(f"{event.get('title', '')} {event.get('summary', '')}"))
-        target_keywords = set(self.extract_keywords(f"{target_event.get('title', '')} {target_event.get('summary', '')}"))
-        keyword_overlap = len(event_keywords & target_keywords) / max(1, len(event_keywords | target_keywords))
-
-        # --- TF-IDF Cosine Similarity ---
-        try:
-            from sklearn.feature_extraction.text import TfidfVectorizer
-            from sklearn.metrics.pairwise import cosine_similarity
-        except ImportError:
-            return keyword_overlap  # fallback if sklearn not available
-        docs = [f"{event.get('title', '')} {event.get('summary', '')}", f"{target_event.get('title', '')} {target_event.get('summary', '')}"]
-        tfidf = TfidfVectorizer().fit_transform(docs)
-        tfidf_sim = cosine_similarity(tfidf[0], tfidf[1])[0][0]
-
-        # --- Named Entity Overlap (Stanza) ---
-        try:
-            # Stanza setup (download model if needed)
-            if not hasattr(self, 'stanza_nlp'):
-                stanza.download('en')
-                self.stanza_nlp = stanza.Pipeline('en', processors='tokenize,ner', use_gpu=False)
-            doc1 = self.stanza_nlp(docs[0])
-            doc2 = self.stanza_nlp(docs[1])
-            ents1 = set([ent.text for ent in doc1.ents])
-            ents2 = set([ent.text for ent in doc2.ents])
-            entity_overlap = len(ents1 & ents2) / max(1, len(ents1 | ents2))
-        except Exception:
-            entity_overlap = 0.0
-
-        # --- Weighted Hybrid Score ---
-        score = 0.4 * keyword_overlap + 0.4 * tfidf_sim + 0.2 * entity_overlap
-        return min(1.0, score)
     
-    def calculate_relevance_score(self, event: Dict, target_keywords: List[str], target_event: Optional[Dict] = None) -> float:
-        """Hybrid relevance: combines keyword overlap, TF-IDF cosine similarity, and entity overlap"""
-        # If target_event is provided, use hybrid method
-        if target_event:
-            score = self.hybrid_relevance_score(event, target_event)
-        else:
-            # fallback to keyword overlap
-            event_text = f"{event.get('title', '')} {event.get('summary', '')}"
+    def calculate_relevance_score(self, event: Dict, target_keywords: List[str]) -> float:
+        """Calculate semantic relevance using transformer model"""
+        event_text = f"{event.get('title', '')} {event.get('summary', '')}"
+        keywords_text = ' '.join(target_keywords)
+        if not hasattr(self, 'sim_model') or self.sim_model is None:
+            # Fallback to keyword overlap if model not loaded
             event_keywords = self.extract_keywords(event_text)
             overlap = len(set(event_keywords) & set(target_keywords))
             total_keywords = len(set(event_keywords) | set(target_keywords))
-            score = overlap / max(1, total_keywords)
-        # Boost score for recent events
-        if 'date' in event:
-            days_old = (datetime.now() - event['date']).days
-            recency_bonus = max(0, 1 - days_old / 365)  # Bonus decreases over a year
-            score = min(1.0, score * 1.5 + recency_bonus * 0.3)
-        return score
+            if total_keywords == 0:
+                return 0.0
+            jaccard_similarity = overlap / total_keywords
+            return jaccard_similarity
+        try:
+            # Get embeddings
+            emb_event = self.sim_model.encode(event_text, convert_to_tensor=True)
+            emb_keywords = self.sim_model.encode(keywords_text, convert_to_tensor=True)
+            # Compute cosine similarity
+            import torch
+            similarity = torch.nn.functional.cosine_similarity(emb_event, emb_keywords, dim=0).item()
+            # Normalize to [0,1]
+            score = max(0.0, min(1.0, (similarity + 1) / 2))
+            # Boost score for recent events
+            if 'date' in event:
+                days_old = (datetime.now() - event['date']).days
+                recency_bonus = max(0, 1 - days_old / 365)
+                score = min(1.0, score * 1.2 + recency_bonus * 0.2)
+            return score
+        except Exception as e:
+            st.error(f"Error in transformer relevance scoring: {str(e)}")
+            return 0.0
     
     def build_event_graph(self, initial_url: str) -> bool:
         """Build the complete event graph starting from an initial news article"""
@@ -286,10 +271,7 @@ class NewsEventMapper:
                     if news['url'] in processed or added_count >= 5:
                         continue
                     
-                    relevance = self.calculate_relevance_score(news, current_event.keywords, target_event={
-                        'title': current_event.title,
-                        'summary': current_event.summary
-                    })
+                    relevance = self.calculate_relevance_score(news, current_event.keywords)
                     if relevance < 0.3:  # Relevance threshold
                         continue
                     
