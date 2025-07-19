@@ -5,4 +5,8 @@ beautifulsoup4
 requests
 pandas
 numpy
+<<<<<<< HEAD
 sentence-transformers
+=======
+stanza
+>>>>>>> 55b5f10fbb1bd1ab3c67f81a5bacb6292677dfe5
