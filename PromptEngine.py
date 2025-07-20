@@ -27,8 +27,8 @@ class KeywordEngine:
 
         The input text may include multiple unrelated topics. Your task is to extract **separate keyword phrases for each distinct topic** in the paragraph.
 
-        Focus on named entities, events, and phrases someone might search on Google News or in academic/research databases. Do not include filler words or full sentences. Keep keywords short, relevant, and grouped by topic. Do not add any extra sentences under any circumstances.
-
+        Focus on named entities, events, and phrases someone might search on Google News or in academic/research databases. Do not include filler words or full sentences. Keep keywords short, relevant, and grouped by topic. Do not add any extra sentences under any circumstances. Do not add in any extra symbols and adhere to the format given always, and must not change under any reason.
+        
         Format:
         Keywords 1: <comma-separated list>
         Keywords 2: <comma-separated list>
