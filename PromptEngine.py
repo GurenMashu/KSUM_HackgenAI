@@ -9,8 +9,10 @@ from transformers import (
 
 
 # Loading the model, has to be done first when starting streamlit to run the whole thing, IMP!!!!!!!!
+
+
 import llm
-tokenizer, model = llm.model_init()
+# tokenizer, model = llm.model_init()
 
 
 class KeywordEngine:
