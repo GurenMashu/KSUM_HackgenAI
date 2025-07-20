@@ -18,7 +18,7 @@ from collections import deque, defaultdict
 import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
-from PromptEngine import KeywordEngine, model, tokenizer
+from PromptEngine import KeywordEngine
 import gc
 
 @dataclass
@@ -222,7 +222,7 @@ class NewsEventMapper:
             st.error(f"Error in transformer relevance scoring: {str(e)}")
             return 0.0
     
-    def build_event_graph_from_prompt(self, user_prompt: str) -> bool:
+    def build_event_graph_from_prompt(self, user_prompt: str, model, tokenizer) -> bool:
         """Build the event graph starting from a user prompt using KeywordEngine"""
         try:
             torch.cuda.empty_cache()

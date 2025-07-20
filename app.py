@@ -5,6 +5,9 @@ from datetime import datetime
 import json
 import numpy as np
 
+import llm
+tokenizer, model = llm.model_init()
+
 def main():
     st.set_page_config(
         page_title="News Event Mind Map Generator",
@@ -67,7 +70,7 @@ def main():
     if analyze_button and user_prompt:
         with st.spinner("🔍 Analyzing prompt and building connection map..."):
             st.info("📡 Extracting keywords and searching news articles...")
-            success = st.session_state.mapper.build_event_graph_from_prompt(user_prompt)
+            success = st.session_state.mapper.build_event_graph_from_prompt(user_prompt, model, tokenizer)
             if success:
                 st.session_state.graph_built = True
                 st.success("✅ Analysis complete! Explore the mind map below.")
