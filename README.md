@@ -1,9 +1,9 @@
 # MERT
 
 ## The Team
-**Team name** : R-Squared
-**Team members** : Sreehari J R, Joel Varghese Oommen, Glenn Mathews
-**Track** : Media
+1. **Team name** : R-Squared
+2. **Team members** : Sreehari J R, Joel Varghese Oommen, Glenn Mathews
+3. **Track** : Media
 
 ## Problem statement
 Content creators and film-makers struggle to efficiently generate creative narratives from current events due to the lack of tools that connect user intent with relevant news insights and structured storytelling.
