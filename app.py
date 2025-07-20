@@ -1,9 +1,9 @@
 import streamlit as st
-from main import NewsEventMapper
 import pandas as pd
-import numpy as np
-import json
+from main import NewsEventMapper
 from datetime import datetime
+import json
+import numpy as np
 
 def main():
     st.set_page_config(
