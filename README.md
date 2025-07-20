@@ -1,4 +1,5 @@
 # MERT
+ Media and Art engine
 
 ## The Team
 1. **Team name** : R-Squared
@@ -9,9 +10,10 @@
 Content creators and film-makers struggle to efficiently generate creative narratives from current events due to the lack of tools that connect user intent with relevant news insights and structured storytelling.
 
 ## Solution
-We propose a tool that searches for real news articles based on the user input synopsis/topic/idea, from which most relevant articles are used to generate a screenplay/story-line that can be downloaded. The extracted articles can be visualized and visited via an interactive 3D mapping within the web-interface.
+We propose a web-based tool that searches for real news articles based on the user input synopsis/topic/idea, from which most relevant articles are used to generate a screenplay/story-line that can be downloaded. The extracted articles can be visualized and visited via an interactive 3D mapping within the web-interface.
 
 ## Project description
+
 
 # Technical details
 ## Tech stack and libraries used
