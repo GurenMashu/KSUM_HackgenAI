@@ -90,7 +90,7 @@ class ScriptEngine:
         self.max_tokens = max_tokens
 
 
-    def extract_keyword(self, prompt):
+    def generate_script(self, prompt):
 
         self.user_prompt = prompt
 
