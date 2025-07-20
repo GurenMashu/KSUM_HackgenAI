@@ -1,9 +1,9 @@
 # MERT
 
 ## The Team
-**Team name** : R-Squared
-**Team members** : Sreehari J R, Joel Varghese Oommen, Glenn Mathews
-**Track** : Media
+1. **Team name** : R-Squared
+2. **Team members** : Sreehari J R, Joel Varghese Oommen, Glenn Mathews
+3. **Track** : Media
 
 ## Problem statement
 Content creators and film-makers struggle to efficiently generate creative narratives from current events due to the lack of tools that connect user intent with relevant news insights and structured storytelling.
@@ -44,3 +44,27 @@ streamlit run app.py
 4. The generated mind map and the script/screenplay can be downloaded.
 
 ## Screenshots
+**Front page**
+<p align="center">
+  <img src="screenshots\Screenshot 2025-07-20 134030.png" alt="Front page">
+</p>
+
+**Processing user input**
+<p align="center">
+  <img src="screenshots\Screenshot 2025-07-20 134226.png" alt="next1">
+</p>
+
+**Mind map of news articles**
+<p align="center">
+  <img src="screenshots\Screenshot 2025-07-20 134308.png" alt="next2">
+</p>
+
+**Details of extracted news articles**
+<p align="center">
+  <img src="screenshots\Screenshot 2025-07-20 134326.png" alt="next3">
+</p>
+
+**Summary of the extracted events**
+<p align="center">
+  <img src="screenshots\Screenshot 2025-07-20 134344.png" alt="next4">
+</p>
