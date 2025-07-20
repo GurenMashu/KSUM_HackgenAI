@@ -98,7 +98,10 @@ class ScriptEngine:
             self.system_prompt = """using the given json file and its hierarchy and timeline, create a news article with all the relevant information."""
             self.temperature = 0.1
         else: # case when news relevance to a story is more important
-            self.system_prompt = """using the given json file and its hierarchy and timeline, create a story."""
+            self.system_prompt = """using the given json file and its hierarchy and timeline, create a story.
+                                    The story should be STRICTLY written in Proper screenplay format including using 12-point Courier font, with specific margins: 1.5 inches on the left and 
+                                    1 inch on the right, top, and bottom. Each scene should start with a scene heading (slug line) in all caps, followed
+                                    by action lines, character names, and dialogue, all adhering to industry standards for clarity and readability."""
             self.temperature = 0.7
 
 
