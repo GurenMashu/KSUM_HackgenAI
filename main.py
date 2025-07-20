@@ -147,7 +147,7 @@ class NewsEventMapper:
 
     def search_related_news(self, keywords: List[str], base_date: datetime) -> List[Dict]:
         """Fetch related news using NewsAPI (replace with your API key)"""
-        API_KEY = 'df0a8efd986149f683e7d172f8f52fa2' 
+        API_KEY = '5b9b534d991d42f69b66a9c74eb281b9' 
         NEWS_URL = "https://newsapi.org/v2/everything"
 
         query = ' OR '.join(keywords)
