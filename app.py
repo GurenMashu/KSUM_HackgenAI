@@ -208,27 +208,62 @@ def main():
                                 torch.cuda.synchronize()
                             gc.collect()
                             
+                            # graph_data = {
+                            #     'nodes': [
+                            #         {
+                            #             'id': node,
+                            #             'title': st.session_state.mapper.graph.nodes[node]['event'].title,
+                            #             'date': st.session_state.mapper.graph.nodes[node]['event'].date.isoformat(),
+                            #             'relevance': st.session_state.mapper.graph.nodes[node]['event'].relevance_score,
+                            #             'depth': st.session_state.mapper.graph.nodes[node]['event'].depth_level,
+                            #             'url': st.session_state.mapper.graph.nodes[node]['event'].url
+                            #         }
+                            #         for node in st.session_state.mapper.graph.nodes()
+                            #     ],
+                            #     'edges': [
+                            #         {
+                            #             'source': edge[0],
+                            #             'target': edge[1],
+                            #             'weight': st.session_state.mapper.graph.edges[edge].get('weight', 1.0),
+                            #             'relationship': st.session_state.mapper.graph.edges[edge].get('relationship', 'related')
+                            #         }
+                            #         for edge in st.session_state.mapper.graph.edges()
+                            #     ]
+                            # }
+                            all_nodes = [
+                                {
+                                    'id': node,
+                                    'title': st.session_state.mapper.graph.nodes[node]['event'].title,
+                                    'date': st.session_state.mapper.graph.nodes[node]['event'].date.isoformat(),
+                                    'relevance': st.session_state.mapper.graph.nodes[node]['event'].relevance_score,
+                                    'depth': st.session_state.mapper.graph.nodes[node]['event'].depth_level,
+                                    'url': st.session_state.mapper.graph.nodes[node]['event'].url
+                                }
+                                for node in st.session_state.mapper.graph.nodes()
+                            ]
+
+                            # Step 2: Select top-K relevant nodes
+                            top_nodes = heapq.nlargest(TOP_K, all_nodes, key=lambda x: x['relevance'])
+
+                            # Step 3: Get set of selected node IDs
+                            selected_node_ids = set(node['id'] for node in top_nodes)
+
+                            # Step 4: Filter edges that connect selected nodes
+                            filtered_edges = [
+                                {
+                                    'source': edge[0],
+                                    'target': edge[1],
+                                    'weight': st.session_state.mapper.graph.edges[edge].get('weight', 1.0),
+                                    'relationship': st.session_state.mapper.graph.edges[edge].get('relationship', 'related')
+                                }
+                                for edge in st.session_state.mapper.graph.edges()
+                                if edge[0] in selected_node_ids and edge[1] in selected_node_ids
+                            ]
+
+                            # Step 5: Create graph data
                             graph_data = {
-                                'nodes': [
-                                    {
-                                        'id': node,
-                                        'title': st.session_state.mapper.graph.nodes[node]['event'].title,
-                                        'date': st.session_state.mapper.graph.nodes[node]['event'].date.isoformat(),
-                                        'relevance': st.session_state.mapper.graph.nodes[node]['event'].relevance_score,
-                                        'depth': st.session_state.mapper.graph.nodes[node]['event'].depth_level,
-                                        'url': st.session_state.mapper.graph.nodes[node]['event'].url
-                                    }
-                                    for node in st.session_state.mapper.graph.nodes()
-                                ],
-                                'edges': [
-                                    {
-                                        'source': edge[0],
-                                        'target': edge[1],
-                                        'weight': st.session_state.mapper.graph.edges[edge].get('weight', 1.0),
-                                        'relationship': st.session_state.mapper.graph.edges[edge].get('relationship', 'related')
-                                    }
-                                    for edge in st.session_state.mapper.graph.edges()
-                                ]
+                                'nodes': top_nodes,
+                                'edges': filtered_edges
                             }
                             
                             # Temporary move model to CPU during script generation if needed
