@@ -13,7 +13,7 @@ Content creators and film-makers struggle to efficiently generate creative narra
 We propose a web-based tool that searches for real news articles based on the user input synopsis/topic/idea, from which most relevant articles are used to generate a screenplay/story-line that can be downloaded. The extracted articles can be visualized and visited via an interactive 3D mapping within the web-interface.
 
 ## Project description
-
+MERT is a web-based tool that accepts topics, abstracts or synopsis as input. It then searches for real news articles based on the keywords extracted from the user prompt, building a mapping 
 
 # Technical details
 ## Tech stack and libraries used

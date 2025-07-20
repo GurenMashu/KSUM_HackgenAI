@@ -28,7 +28,7 @@ def main():
         layout="wide"
     )
     
-    st.title("X")
+    st.title("MERT")
     st.markdown("""
     **Discover the deep connections behind any news event**
     
@@ -331,24 +331,6 @@ def main():
         else:
             st.warning("No data available for visualization.")
     
-    # Footer
-    st.markdown("---")
-    st.markdown("""
-    **💡 How it works:**
-    1. **Input Analysis**: Scrapes and analyzes the initial news article
-    2. **Keyword Extraction**: Identifies key topics and entities  
-    3. **Connection Discovery**: Searches for related events and news
-    4. **Relevance Scoring**: Calculates how events connect to each other
-    5. **Graph Building**: Creates an interactive network of related events
-    6. **Timeline Mapping**: Shows the chronological flow of events
-    
-    **🔧 Technical Features:**
-    - Deep graph analysis beyond LLM limitations
-    - Interactive visualization with Plotly
-    - Relevance-based event scoring
-    - Chronological event mapping
-    - Exportable data formats
-    """)
 
 if __name__ == "__main__":
     main()
