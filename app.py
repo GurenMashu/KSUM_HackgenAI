@@ -199,69 +199,84 @@ def main():
             col1, col2 = st.columns(2)
             
             with col1:
-                if st.button("📊 Download Graph Data (JSON)"):
-                    # graph_data = {
-                    #     'nodes': [
-                    #         {
-                    #             'id': node,
-                    #             'title': st.session_state.mapper.graph.nodes[node]['event'].title,
-                    #             'date': st.session_state.mapper.graph.nodes[node]['event'].date.isoformat(),
-                    #             'relevance': st.session_state.mapper.graph.nodes[node]['event'].relevance_score,
-                    #             'depth': st.session_state.mapper.graph.nodes[node]['event'].depth_level,
-                    #             'url': st.session_state.mapper.graph.nodes[node]['event'].url
-                    #         }
-                    #         for node in st.session_state.mapper.graph.nodes()
-                    #     ],
-                    #     'edges': [
-                    #         {
-                    #             'source': edge[0],
-                    #             'target': edge[1],
-                    #             'weight': st.session_state.mapper.graph.edges[edge].get('weight', 1.0),
-                    #             'relationship': st.session_state.mapper.graph.edges[edge].get('relationship', 'related')
-                    #         }
-                    #         for edge in st.session_state.mapper.graph.edges()
-                    #     ]
-                    # }
-                    all_nodes = [
-                        {
-                            'id': node,
-                            'title': st.session_state.mapper.graph.nodes[node]['event'].title,
-                            'date': st.session_state.mapper.graph.nodes[node]['event'].date.isoformat(),
-                            'relevance': st.session_state.mapper.graph.nodes[node]['event'].relevance_score,
-                            'depth': st.session_state.mapper.graph.nodes[node]['event'].depth_level,
-                            'url': st.session_state.mapper.graph.nodes[node]['event'].url
-                        }
-                        for node in st.session_state.mapper.graph.nodes()
-                    ]
-                    top_nodes = heapq.nlargest(TOP_K, all_nodes, key=lambda x: x['relevance'])
-
-                    selected_node_ids = set(node['id'] for node in top_nodes)
-                    filtered_edges = [
-                        {
-                            'source': edge[0],
-                            'target': edge[1],
-                            'weight': st.session_state.mapper.graph.edges[edge].get('weight', 1.0),
-                            'relationship': st.session_state.mapper.graph.edges[edge].get('relationship', 'related')
-                        }
-                        for edge in st.session_state.mapper.graph.edges()
-                        if edge[0] in selected_node_ids and edge[1] in selected_node_ids
-                    ]
-                    graph_data = {
-                        'nodes': top_nodes,
-                        'edges': filtered_edges
-                    }
-
-                    script_engine = ScriptEngine(st.session_state.model,st.session_state.tokenizer,False)
-                    script = script_engine.generate_script(user_prompt=json.dumps(graph_data))
-                    # st.download_button(
-                    #     label="Download Script",
-                    #     data=json.dumps(graph_data, indent=2),
-                    #     file_name=f"news_mindmap_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                    #     mime="application/json"
-                    # )
+                if st.button("📊 Create Script"):
+                    with st.spinner("🎬 Generating script..."):
+                        try:
+                            # Pre-clear GPU memory before intensive operation
+                            if torch.cuda.is_available():
+                                torch.cuda.empty_cache()
+                                torch.cuda.synchronize()
+                            gc.collect()
+                            
+                            graph_data = {
+                                'nodes': [
+                                    {
+                                        'id': node,
+                                        'title': st.session_state.mapper.graph.nodes[node]['event'].title,
+                                        'date': st.session_state.mapper.graph.nodes[node]['event'].date.isoformat(),
+                                        'relevance': st.session_state.mapper.graph.nodes[node]['event'].relevance_score,
+                                        'depth': st.session_state.mapper.graph.nodes[node]['event'].depth_level,
+                                        'url': st.session_state.mapper.graph.nodes[node]['event'].url
+                                    }
+                                    for node in st.session_state.mapper.graph.nodes()
+                                ],
+                                'edges': [
+                                    {
+                                        'source': edge[0],
+                                        'target': edge[1],
+                                        'weight': st.session_state.mapper.graph.edges[edge].get('weight', 1.0),
+                                        'relationship': st.session_state.mapper.graph.edges[edge].get('relationship', 'related')
+                                    }
+                                    for edge in st.session_state.mapper.graph.edges()
+                                ]
+                            }
+                            
+                            # Temporary move model to CPU during script generation if needed
+                            model_was_on_cuda = next(st.session_state.model.parameters()).is_cuda
+                            if model_was_on_cuda and torch.cuda.memory_allocated() > torch.cuda.get_device_properties(0).total_memory * 0.8:
+                                st.session_state.model.cpu()
+                                torch.cuda.empty_cache()
+                            
+                            script_engine = ScriptEngine(st.session_state.model, st.session_state.tokenizer, False)
+                            script = script_engine.generate_script(prompt=json.dumps(graph_data))
+                            
+                            # Move model back to GPU if it was there originally
+                            if model_was_on_cuda and not next(st.session_state.model.parameters()).is_cuda:
+                                st.session_state.model.cuda()
+                            
+                            st.session_state.generated_script = script
+                            st.success("✅ Script generated successfully!")
+                            
+                        except torch.cuda.OutOfMemoryError:
+                            st.error("🔥 CUDA out of memory. Attempting CPU fallback...")
+                            try:
+                                # Force CPU execution
+                                st.session_state.model.cpu()
+                                torch.cuda.empty_cache()
+                                script_engine = ScriptEngine(st.session_state.model, st.session_state.tokenizer, False)
+                                script = script_engine.generate_script(prompt=json.dumps(graph_data))
+                                st.session_state.generated_script = script
+                                st.success("✅ Script generated on CPU!")
+                                # Move back to GPU
+                                if torch.cuda.is_available():
+                                    st.session_state.model.cuda()
+                            except Exception as cpu_e:
+                                st.error(f"❌ CPU fallback failed: {str(cpu_e)}")
+                                
+                        except Exception as e:
+                            st.error(f"❌ Script generation failed: {str(e)}")
+                        
+                        finally:
+                            # Always cleanup
+                            if torch.cuda.is_available():
+                                torch.cuda.empty_cache()
+                            gc.collect()
+                
+                # Show download button only if script exists
+                if 'generated_script' in st.session_state:
                     st.download_button(
-                        label="Download Script",
-                        data=script,
+                        label="📥 Download Script",
+                        data=st.session_state.generated_script,
                         file_name=f"news_script_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
                         mime="text/plain"
                     )
