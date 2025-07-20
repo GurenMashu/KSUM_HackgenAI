@@ -19,6 +19,7 @@ import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
 from PromptEngine import KeywordEngine, model, tokenizer
+import gc
 
 @dataclass
 class NewsEvent:
@@ -224,10 +225,13 @@ class NewsEventMapper:
     def build_event_graph_from_prompt(self, user_prompt: str) -> bool:
         """Build the event graph starting from a user prompt using KeywordEngine"""
         try:
+            torch.cuda.empty_cache()
+            gc.collect()
             keyword_engine = KeywordEngine(model=model, tokenizer=tokenizer)
             extracted = keyword_engine.extract_keyword(user_prompt)
+            torch.cuda.empty_cache()
+            gc.collect()
             # Parse keywords from output (handle both formats)
-            import re, json
             keywords = []
             # Try JSON format first
             try:
