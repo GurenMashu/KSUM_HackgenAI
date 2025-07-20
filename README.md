@@ -9,6 +9,7 @@
 Content creators and film-makers struggle to efficiently generate creative narratives from current events due to the lack of tools that connect user intent with relevant news insights and structured storytelling.
 
 ## Solution
+We propose a tool that searches for real news articles based on the user input synopsis/topic/idea, from which most relevant articles are used to generate a screenplay/story-line that can be downloaded. The extracted articles can be visualized and visited via an interactive 3D mapping within the web-interface.
 
 ## Project description
 
@@ -26,10 +27,17 @@ sentence_transformer # for computing semantice similarity between online article
 ```
 
 ## Implementation
-**PromptEngine.py**
-**llm.py**
-**main.py**
-**app.py**
+1. **PromptEngine.py**
+Contains engines for keyword extraction from the searched articles, as well as for script generation from the built news article mapping.
+
+2. **llm.py**
+Logic for handling the locally hosted llama2-7b model for text generation.
+
+3. **main.py**
+The central framwork orchestrating the project's functionality - connects all modules
+
+4. **app.py**
+The Web-Interface built with streamlit.
 
 ## Instructions to use
 1. Install the dependecies
@@ -68,3 +76,5 @@ streamlit run app.py
 <p align="center">
   <img src="screenshots\Screenshot 2025-07-20 134344.png" alt="next4">
 </p>
+
+# DEMO - Video
