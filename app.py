@@ -4,9 +4,18 @@ from main import NewsEventMapper
 from datetime import datetime
 import json
 import numpy as np
+import torch
+import gc
 
 import llm
-tokenizer, model = llm.model_init()
+if 'tokenizer' not in st.session_state or 'model' not in st.session_state:
+    with st.spinner("Loading AI models..."):
+        tokenizer, model = llm.model_init()
+        st.session_state.tokenizer = tokenizer
+        st.session_state.model = model
+else:
+    tokenizer = st.session_state.tokenizer
+    model = st.session_state.model
 
 def main():
     st.set_page_config(
@@ -42,6 +51,24 @@ def main():
     st.session_state.mapper.max_depth = max_depth
     st.session_state.mapper.max_events_per_level = max_events
     
+    # Memory Management Section
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Memory Management")
+    if st.sidebar.button("🧹 Clear GPU Memory"):
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+        st.sidebar.success("Memory cleared!")
+    
+    # GPU Memory Display
+    if torch.cuda.is_available():
+        try:
+            memory_used = torch.cuda.memory_allocated() / 1024**3  # GB
+            memory_total = torch.cuda.get_device_properties(0).total_memory / 1024**3  # GB
+            st.sidebar.metric("GPU Memory", f"{memory_used:.1f}GB / {memory_total:.1f}GB")
+        except:
+            pass  # Skip if CUDA info unavailable
+    
     # Main input
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -66,16 +93,39 @@ def main():
                 st.session_state.sample_prompt = prompt
                 user_prompt = prompt
 
-    # Process analysis
+    # Process analysis with enhanced error handling
     if analyze_button and user_prompt:
-        with st.spinner("🔍 Analyzing prompt and building connection map..."):
-            st.info("📡 Extracting keywords and searching news articles...")
-            success = st.session_state.mapper.build_event_graph_from_prompt(user_prompt, model, tokenizer)
-            if success:
-                st.session_state.graph_built = True
-                st.success("✅ Analysis complete! Explore the mind map below.")
-            else:
-                st.error("❌ Failed to analyze the prompt. Please try a different topic or description.")
+        try:
+            with st.spinner("🔍 Analyzing prompt and building connection map..."):
+                st.info("📡 Extracting keywords and searching news articles...")
+                success = st.session_state.mapper.build_event_graph_from_prompt(
+                    user_prompt, 
+                    st.session_state.model, 
+                    st.session_state.tokenizer
+                )
+                
+                # Memory cleanup after analysis
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+                
+                if success:
+                    st.session_state.graph_built = True
+                    st.success("✅ Analysis complete! Explore the mind map below.")
+                else:
+                    st.error("❌ Failed to analyze the prompt. Please try a different topic or description.")
+                    
+        except torch.cuda.OutOfMemoryError:
+            st.error("🔥 CUDA out of memory. Try reducing analysis depth or restarting the app.")
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+            
+        except Exception as e:
+            st.error(f"❌ Error during analysis: {str(e)}")
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
     
     # Display results
     if st.session_state.graph_built:
