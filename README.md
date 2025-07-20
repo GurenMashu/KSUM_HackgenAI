@@ -13,7 +13,7 @@ Content creators and film-makers struggle to efficiently generate creative narra
 We propose a web-based tool that searches for real news articles based on the user input synopsis/topic/idea, from which most relevant articles are used to generate a screenplay/story-line that can be downloaded. The extracted articles can be visualized and visited via an interactive 3D mapping within the web-interface.
 
 ## Project description
-MERT is a web-based tool that accepts topics, abstracts or synopsis as input. It then searches for real news articles based on the keywords extracted from the user prompt, building a mapping 
+MERT is a web-based tool that accepts topics, abstracts or synopsis as input. It then searches for real news articles based on the keywords extracted from the user prompt, building a mapping of these articles based on its relevance to the prompt. This mapping is visualized and further used to generate a screenplay, which is based off of the top "k" most relevant articles from the mapping. This is followed by generation of some images to better visualize the screenplay.
 
 # Technical details
 ## Tech stack and libraries used
@@ -29,8 +29,8 @@ sentence_transformer # for computing semantice similarity between online article
 ```
 
 ## Implementation
-1. **PromptEngine.py**
-Contains engines for keyword extraction from the searched articles, as well as for script generation from the built news article mapping.
+1. **PromptEngine.py** 
+Contains engines for keyword extraction from the searched articles, as well as for script generation from the built news article mapping. 
 
 2. **llm.py**
 Logic for handling the locally hosted llama2-7b model for text generation.
