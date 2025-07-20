@@ -265,6 +265,9 @@ def main():
                                 'nodes': top_nodes,
                                 'edges': filtered_edges
                             }
+
+                            final_prompt = "The original prompt of the user was: " + user_prompt + "\n\n" + \
+                                "Generate a script according to the given json file. "+ json.dumps(graph_data)
                             
                             # Temporary move model to CPU during script generation if needed
                             model_was_on_cuda = next(st.session_state.model.parameters()).is_cuda
@@ -273,7 +276,7 @@ def main():
                                 torch.cuda.empty_cache()
                             
                             script_engine = ScriptEngine(st.session_state.model, st.session_state.tokenizer, False)
-                            script = script_engine.generate_script(prompt=json.dumps(graph_data))
+                            script = script_engine.generate_script(prompt=final_prompt)
                             
                             # Move model back to GPU if it was there originally
                             if model_was_on_cuda and not next(st.session_state.model.parameters()).is_cuda:
