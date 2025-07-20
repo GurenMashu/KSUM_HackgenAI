@@ -40,4 +40,7 @@ pip install -r requirements.txt
 ```bash
 streamlit run app.py
 ```
-3. Within the web-interface - type in a prompt related to
+3. Within the web-interface - type in a prompt related to any news topic.
+4. The generated mind map and the script/screenplay can be downloaded.
+
+## Screenshots
