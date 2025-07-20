@@ -10,6 +10,8 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 # print(f'Running on {device}')
 # print(f'Running torch version {torch.__version__}')
 
+
+
 def model_loading():
     model_path = "/home/joeloommen/Documents/projects/KSUM_HackgenAI/Models"
     tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
@@ -30,6 +32,9 @@ def model_loading():
     
     return tokenizer, model
 
+def model_init():
+    tokenizer, model = model_loading()
+    return tokenizer, model
 
 # tokenizer, model = model_loading()
 
