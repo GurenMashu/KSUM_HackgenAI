@@ -2,3 +2,5 @@
 venv
 Abstract\ HackGenAI.txt
 __pycache__
+test.py
+streamlit_app.py
