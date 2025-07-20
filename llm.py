@@ -27,7 +27,8 @@ def model_loading():
         model_path,
         device_map='auto',
         local_files_only=True,
-        quantization_config=quant_config
+        quantization_config=quant_config,
+        llm_int8_enable_fp32_cpu_offload=True
     )
     
     return tokenizer, model
