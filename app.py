@@ -41,43 +41,38 @@ def main():
     
     # Main input
     col1, col2 = st.columns([3, 1])
-    
     with col1:
-        news_url = st.text_input(
-            "Enter a news article URL:",
-            placeholder="https://example.com/news-article",
-            help="Paste the URL of any news article to analyze its background and connections"
+        user_prompt = st.text_area(
+            "Enter a news-related prompt or description:",
+            placeholder="E.g. 'Recent developments in AI regulation in Europe'",
+            help="Describe a news topic, event, or area of interest to analyze its background and connections"
         )
-    
     with col2:
-        st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+        st.markdown("<br>", unsafe_allow_html=True)
         analyze_button = st.button("🔍 Analyze", type="primary")
-    
-    # Sample URLs for testing
-    with st.expander("📝 Try Sample URLs"):
-        sample_urls = [
-            "https://example.com/sample-political-news",
-            "https://example.com/sample-economic-news", 
-            "https://example.com/sample-technology-news"
+
+    # Sample prompts for testing
+    with st.expander("📝 Try Sample Prompts"):
+        sample_prompts = [
+            "US presidential election 2024 controversies",
+            "Major breakthroughs in cancer research 2025",
+            "Global impact of electric vehicle adoption"
         ]
-        
-        for i, url in enumerate(sample_urls):
-            if st.button(f"Sample {i+1}: {url}", key=f"sample_{i}"):
-                st.session_state.sample_url = url
-                news_url = url
-    
+        for i, prompt in enumerate(sample_prompts):
+            if st.button(f"Sample {i+1}: {prompt}", key=f"sample_{i}"):
+                st.session_state.sample_prompt = prompt
+                user_prompt = prompt
+
     # Process analysis
-    if analyze_button and news_url:
-        with st.spinner("🔍 Analyzing news article and building connection map..."):
-            st.info("📡 Scraping article content...")
-            
-            success = st.session_state.mapper.build_event_graph(news_url)
-            
+    if analyze_button and user_prompt:
+        with st.spinner("🔍 Analyzing prompt and building connection map..."):
+            st.info("📡 Extracting keywords and searching news articles...")
+            success = st.session_state.mapper.build_event_graph_from_prompt(user_prompt)
             if success:
                 st.session_state.graph_built = True
                 st.success("✅ Analysis complete! Explore the mind map below.")
             else:
-                st.error("❌ Failed to analyze the article. Please check the URL and try again.")
+                st.error("❌ Failed to analyze the prompt. Please try a different topic or description.")
     
     # Display results
     if st.session_state.graph_built:

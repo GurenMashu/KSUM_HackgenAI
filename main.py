@@ -18,6 +18,7 @@ from collections import deque, defaultdict
 import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
+from PromptEngine import KeywordEngine, model, tokenizer
 
 @dataclass
 class NewsEvent:
@@ -220,61 +221,75 @@ class NewsEventMapper:
             st.error(f"Error in transformer relevance scoring: {str(e)}")
             return 0.0
     
-    def build_event_graph(self, initial_url: str) -> bool:
-        """Build the complete event graph starting from an initial news article"""
+    def build_event_graph_from_prompt(self, user_prompt: str) -> bool:
+        """Build the event graph starting from a user prompt using KeywordEngine"""
         try:
-            # Process initial article
-            initial_content = self.scrape_news_content(initial_url)
-            if not initial_content:
+            keyword_engine = KeywordEngine(model=model, tokenizer=tokenizer)
+            extracted = keyword_engine.extract_keyword(user_prompt)
+            # Parse keywords from output (handle both formats)
+            import re, json
+            keywords = []
+            # Try JSON format first
+            try:
+                parsed = json.loads(extracted)
+                # Flatten all keyword lists
+                for v in parsed.values():
+                    if isinstance(v, list):
+                        keywords.extend(v)
+            except Exception:
+                # Fallback to line format
+                lines = extracted.splitlines()
+                for line in lines:
+                    m = re.match(r"Keywords \d+: (.+)", line)
+                    if m:
+                        keywords += [kw.strip() for kw in m.group(1).split(",") if kw.strip()]
+            if not keywords:
+                st.error("No keywords extracted from prompt.")
+                return False
+            base_date = datetime.now()
+            
+            related_news = self.search_related_news(keywords, base_date)
+            if not related_news:
+                st.error("No relevant news articles found for extracted keywords.")
                 return False
             
-            keywords = self.extract_keywords(initial_content['content'])
+            initial_news = related_news[0]
             initial_event = NewsEvent(
-                title=initial_content['title'],
-                url=initial_url,
-                date=initial_content['date'],
-                summary=initial_content['content'][:500] + "...",
+                title=initial_news['title'],
+                url=initial_news['url'],
+                date=initial_news['date'],
+                summary=initial_news['summary'],
                 keywords=keywords,
                 relevance_score=1.0,
                 depth_level=0
             )
-            
-            # Add to graph
             self.graph.add_node(
-                initial_url,
+                initial_news['url'],
                 event=initial_event,
-                pos=(0, 0, 0),  # Add z=0 for 3D
+                pos=(0, 0, 0),
                 color='red',
                 size=30
             )
-            
             # Build graph using BFS
             queue = deque([(initial_event, 0)])
-            processed = {initial_url}
-            
+            processed = {initial_news['url']}
             progress_bar = st.progress(0)
             total_operations = self.max_depth * self.max_events_per_level
             current_operation = 0
-            
             while queue and current_operation < total_operations:
                 current_event, depth = queue.popleft()
-                
                 if depth >= self.max_depth:
                     continue
-                
                 # Search for related news
                 related_news = self.search_related_news(current_event.keywords, current_event.date)
-                
                 # Process related articles
                 added_count = 0
                 for news in related_news[:self.max_events_per_level]:
                     if news['url'] in processed or added_count >= 5:
                         continue
-                    
                     relevance = self.calculate_relevance_score(news, current_event.keywords)
-                    if relevance < 0.3:  # Relevance threshold
+                    if relevance < 0.3:
                         continue
-                    
                     related_event = NewsEvent(
                         title=news['title'],
                         url=news['url'],
@@ -284,18 +299,13 @@ class NewsEventMapper:
                         relevance_score=relevance,
                         depth_level=depth + 1
                     )
-                    
-                    # Add to graph with 3D positioning
                     angle = (added_count * 360 / 8) * np.pi / 180
                     radius = (depth + 1) * 2
                     x = radius * np.cos(angle)
                     y = radius * np.sin(angle)
-                    # z coordinate: spiral or layer by depth
                     z = depth * 2 + np.sin(angle) * 1.5
-
                     color = 'orange' if depth == 0 else 'lightblue' if depth < 3 else 'lightgreen'
                     size = max(10, 25 - depth * 3)
-
                     self.graph.add_node(
                         news['url'],
                         event=related_event,
@@ -303,28 +313,22 @@ class NewsEventMapper:
                         color=color,
                         size=size
                     )
-                    
-                    # Add edge with weight based on relevance
                     self.graph.add_edge(
                         current_event.url,
                         news['url'],
                         weight=relevance,
                         relationship="leads_to" if news['date'] > current_event.date else "caused_by"
                     )
-                    
                     queue.append((related_event, depth + 1))
                     processed.add(news['url'])
                     added_count += 1
                     current_operation += 1
-                    
                     progress_bar.progress(min(1.0, current_operation / total_operations))
-                    time.sleep(0.1)  # Small delay for visualization
-            
+                    time.sleep(0.1)
             progress_bar.empty()
             return True
-            
         except Exception as e:
-            st.error(f"Error building event graph: {str(e)}")
+            st.error(f"Error building event graph from prompt: {str(e)}")
             return False
     
     def create_interactive_plot(self) -> go.Figure:
