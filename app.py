@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import gc
 from PromptEngine import ScriptEngine
+import heapq
 
 import llm
 if 'tokenizer' not in st.session_state or 'model' not in st.session_state:
@@ -19,6 +20,8 @@ else:
     model = st.session_state.model
 
 def main():
+    TOP_K = 10
+
     st.set_page_config(
         page_title="News Event Mind Map Generator",
         page_icon="🗺️",
@@ -197,30 +200,59 @@ def main():
             
             with col1:
                 if st.button("📊 Download Graph Data (JSON)"):
+                    # graph_data = {
+                    #     'nodes': [
+                    #         {
+                    #             'id': node,
+                    #             'title': st.session_state.mapper.graph.nodes[node]['event'].title,
+                    #             'date': st.session_state.mapper.graph.nodes[node]['event'].date.isoformat(),
+                    #             'relevance': st.session_state.mapper.graph.nodes[node]['event'].relevance_score,
+                    #             'depth': st.session_state.mapper.graph.nodes[node]['event'].depth_level,
+                    #             'url': st.session_state.mapper.graph.nodes[node]['event'].url
+                    #         }
+                    #         for node in st.session_state.mapper.graph.nodes()
+                    #     ],
+                    #     'edges': [
+                    #         {
+                    #             'source': edge[0],
+                    #             'target': edge[1],
+                    #             'weight': st.session_state.mapper.graph.edges[edge].get('weight', 1.0),
+                    #             'relationship': st.session_state.mapper.graph.edges[edge].get('relationship', 'related')
+                    #         }
+                    #         for edge in st.session_state.mapper.graph.edges()
+                    #     ]
+                    # }
+                    all_nodes = [
+                        {
+                            'id': node,
+                            'title': st.session_state.mapper.graph.nodes[node]['event'].title,
+                            'date': st.session_state.mapper.graph.nodes[node]['event'].date.isoformat(),
+                            'relevance': st.session_state.mapper.graph.nodes[node]['event'].relevance_score,
+                            'depth': st.session_state.mapper.graph.nodes[node]['event'].depth_level,
+                            'url': st.session_state.mapper.graph.nodes[node]['event'].url
+                        }
+                        for node in st.session_state.mapper.graph.nodes()
+                    ]
+                    top_nodes = heapq.nlargest(TOP_K, all_nodes, key=lambda x: x['relevance'])
+
+                    selected_node_ids = set(node['id'] for node in top_nodes)
+                    filtered_edges = [
+                        {
+                            'source': edge[0],
+                            'target': edge[1],
+                            'weight': st.session_state.mapper.graph.edges[edge].get('weight', 1.0),
+                            'relationship': st.session_state.mapper.graph.edges[edge].get('relationship', 'related')
+                        }
+                        for edge in st.session_state.mapper.graph.edges()
+                        if edge[0] in selected_node_ids and edge[1] in selected_node_ids
+                    ]
                     graph_data = {
-                        'nodes': [
-                            {
-                                'id': node,
-                                'title': st.session_state.mapper.graph.nodes[node]['event'].title,
-                                'date': st.session_state.mapper.graph.nodes[node]['event'].date.isoformat(),
-                                'relevance': st.session_state.mapper.graph.nodes[node]['event'].relevance_score,
-                                'depth': st.session_state.mapper.graph.nodes[node]['event'].depth_level,
-                                'url': st.session_state.mapper.graph.nodes[node]['event'].url
-                            }
-                            for node in st.session_state.mapper.graph.nodes()
-                        ],
-                        'edges': [
-                            {
-                                'source': edge[0],
-                                'target': edge[1],
-                                'weight': st.session_state.mapper.graph.edges[edge].get('weight', 1.0),
-                                'relationship': st.session_state.mapper.graph.edges[edge].get('relationship', 'related')
-                            }
-                            for edge in st.session_state.mapper.graph.edges()
-                        ]
+                        'nodes': top_nodes,
+                        'edges': filtered_edges
                     }
+
                     script_engine = ScriptEngine(st.session_state.model,st.session_state.tokenizer,False)
-                    script = script_engine.generate_script(user_prompt=graph_data)
+                    script = script_engine.generate_script(user_prompt=json.dumps(graph_data))
                     # st.download_button(
                     #     label="Download Script",
                     #     data=json.dumps(graph_data, indent=2),
