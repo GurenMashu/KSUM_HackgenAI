@@ -46,7 +46,7 @@ class NewsEventMapper:
         self.keyword_index = defaultdict(set)
         self.max_depth = 5
         self.max_events_per_level = 10
-        # Load transformer model for semantic similarity
+    # Load transformer model for semantic similarity
         try:
             self.sim_model = SentenceTransformer('all-MiniLM-L6-v2')
         except Exception as e:
@@ -179,11 +179,11 @@ class NewsEventMapper:
                 article_date = datetime.strptime(article["publishedAt"], "%Y-%m-%dT%H:%M:%SZ")
                 relevance = _calculate_relevance(article, keywords)
                 articles.append({
-                'title': article["title"],
-                'url': article["url"],
-                'date': article_date,
-                'summary': article["description"] or "",
-                'relevance': relevance
+                    'title': article.get("title") or "",
+                    'url': article.get("url") or "",
+                    'date': article_date,
+                    'summary': article.get("description") or "",
+                    'relevance': relevance
                 })
         else:
             print(f"NewsAPI request failed: {response.status_code} - {response.text}")
@@ -195,6 +195,7 @@ class NewsEventMapper:
         """Calculate semantic relevance using transformer model"""
         event_text = f"{event.get('title', '')} {event.get('summary', '')}"
         keywords_text = ' '.join(target_keywords)
+        
         if not hasattr(self, 'sim_model') or self.sim_model is None:
             # Fallback to keyword overlap if model not loaded
             event_keywords = self.extract_keywords(event_text)
@@ -204,59 +205,79 @@ class NewsEventMapper:
                 return 0.0
             jaccard_similarity = overlap / total_keywords
             return jaccard_similarity
+        
         try:
-            # Get embeddings
-            emb_event = self.sim_model.encode(event_text, convert_to_tensor=True)
-            emb_keywords = self.sim_model.encode(keywords_text, convert_to_tensor=True)
-            # Compute cosine similarity
-            similarity = torch.nn.functional.cosine_similarity(emb_event, emb_keywords, dim=0).item()
+            # Get embeddings with memory management
+            with torch.no_grad():  # Prevent gradient computation
+                emb_event = self.sim_model.encode(event_text, convert_to_tensor=True)
+                emb_keywords = self.sim_model.encode(keywords_text, convert_to_tensor=True)
+                
+                # Compute cosine similarity
+                similarity = torch.nn.functional.cosine_similarity(emb_event, emb_keywords, dim=0).item()
+                
+                # Clean up tensors
+                del emb_event, emb_keywords
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            
             # Normalize to [0,1]
             score = max(0.0, min(1.0, (similarity + 1) / 2))
+            
             # Boost score for recent events
             if 'date' in event:
                 days_old = (datetime.now() - event['date']).days
                 recency_bonus = max(0, 1 - days_old / 365)
-                score = min(1.0, score * 1.2 + recency_bonus * 0.2)
+                score = min(1.0, score * 1.2 + recency_bonus * 0.2) 
             return score
+        
         except Exception as e:
             st.error(f"Error in transformer relevance scoring: {str(e)}")
             return 0.0
+
     
     def build_event_graph_from_prompt(self, user_prompt: str, model, tokenizer) -> bool:
         """Build the event graph starting from a user prompt using KeywordEngine"""
         try:
-            torch.cuda.empty_cache()
+            # Memory cleanup at start
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             gc.collect()
+            
             keyword_engine = KeywordEngine(model=model, tokenizer=tokenizer)
             extracted = keyword_engine.extract_keyword(user_prompt)
-            torch.cuda.empty_cache()
+            
+            # Cleanup after keyword extraction
+            del keyword_engine
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             gc.collect()
-            # Parse keywords from output (handle both formats)
+            
+            # Parse keywords from output (maintain original parsing logic)
             keywords = []
-            # Try JSON format first
             try:
                 parsed = json.loads(extracted)
-                # Flatten all keyword lists
                 for v in parsed.values():
                     if isinstance(v, list):
                         keywords.extend(v)
             except Exception:
-                # Fallback to line format
                 lines = extracted.splitlines()
                 for line in lines:
                     m = re.match(r"Keywords \d+: (.+)", line)
                     if m:
                         keywords += [kw.strip() for kw in m.group(1).split(",") if kw.strip()]
+            
             if not keywords:
                 st.error("No keywords extracted from prompt.")
                 return False
-            base_date = datetime.now()
             
+            base_date = datetime.now()
             related_news = self.search_related_news(keywords, base_date)
+            
             if not related_news:
                 st.error("No relevant news articles found for extracted keywords.")
                 return False
             
+            # Create initial event (maintain all original parameters)
             initial_news = related_news[0]
             initial_event = NewsEvent(
                 title=initial_news['title'],
@@ -267,6 +288,7 @@ class NewsEventMapper:
                 relevance_score=1.0,
                 depth_level=0
             )
+            
             self.graph.add_node(
                 initial_news['url'],
                 event=initial_event,
@@ -274,26 +296,38 @@ class NewsEventMapper:
                 color='red',
                 size=30
             )
-            # Build graph using BFS
+            
+            # Build graph using BFS with memory management
             queue = deque([(initial_event, 0)])
             processed = {initial_news['url']}
             progress_bar = st.progress(0)
             total_operations = self.max_depth * self.max_events_per_level
             current_operation = 0
+            
             while queue and current_operation < total_operations:
                 current_event, depth = queue.popleft()
                 if depth >= self.max_depth:
                     continue
-                # Search for related news
+                
+                # Periodic memory cleanup
+                if current_operation % 10 == 0:
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    gc.collect()
+                
+                # Search for related news (maintain original logic)
                 related_news = self.search_related_news(current_event.keywords, current_event.date)
-                # Process related articles
+                
+                # Process related articles (maintain all original parameters)
                 added_count = 0
                 for news in related_news[:self.max_events_per_level]:
                     if news['url'] in processed or added_count >= 5:
                         continue
+                    
                     relevance = self.calculate_relevance_score(news, current_event.keywords)
                     if relevance < 0.3:
                         continue
+                    
                     related_event = NewsEvent(
                         title=news['title'],
                         url=news['url'],
@@ -303,6 +337,8 @@ class NewsEventMapper:
                         relevance_score=relevance,
                         depth_level=depth + 1
                     )
+                    
+                    # Calculate position (maintain original positioning logic)
                     angle = (added_count * 360 / 8) * np.pi / 180
                     radius = (depth + 1) * 2
                     x = radius * np.cos(angle)
@@ -310,6 +346,7 @@ class NewsEventMapper:
                     z = depth * 2 + np.sin(angle) * 1.5
                     color = 'orange' if depth == 0 else 'lightblue' if depth < 3 else 'lightgreen'
                     size = max(10, 25 - depth * 3)
+                    
                     self.graph.add_node(
                         news['url'],
                         event=related_event,
@@ -317,21 +354,35 @@ class NewsEventMapper:
                         color=color,
                         size=size
                     )
+                    
                     self.graph.add_edge(
                         current_event.url,
                         news['url'],
                         weight=relevance,
                         relationship="leads_to" if news['date'] > current_event.date else "caused_by"
                     )
+                    
                     queue.append((related_event, depth + 1))
                     processed.add(news['url'])
                     added_count += 1
                     current_operation += 1
                     progress_bar.progress(min(1.0, current_operation / total_operations))
                     time.sleep(0.1)
+            
             progress_bar.empty()
+            
+            # Final cleanup
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+            
             return True
+            
         except Exception as e:
+            # Emergency cleanup on error
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
             st.error(f"Error building event graph from prompt: {str(e)}")
             return False
     
