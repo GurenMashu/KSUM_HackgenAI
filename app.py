@@ -6,6 +6,7 @@ import json
 import numpy as np
 import torch
 import gc
+from PromptEngine import ScriptEngine
 
 import llm
 if 'tokenizer' not in st.session_state or 'model' not in st.session_state:
@@ -218,12 +219,19 @@ def main():
                             for edge in st.session_state.mapper.graph.edges()
                         ]
                     }
-                    
+                    script_engine = ScriptEngine(st.session_state.model,st.session_state.tokenizer,False)
+                    script = script_engine.generate_script(user_prompt=graph_data)
+                    # st.download_button(
+                    #     label="Download Script",
+                    #     data=json.dumps(graph_data, indent=2),
+                    #     file_name=f"news_mindmap_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    #     mime="application/json"
+                    # )
                     st.download_button(
-                        label="Download JSON",
-                        data=json.dumps(graph_data, indent=2),
-                        file_name=f"news_mindmap_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                        mime="application/json"
+                        label="Download Script",
+                        data=script,
+                        file_name=f"news_script_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                        mime="text/plain"
                     )
             
             with col2:
